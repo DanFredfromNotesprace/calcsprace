@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Calcsprace</title>
+<style>
+  :root {
+    --bg: #121212; --panel-bg: #1e1e1e; --display-bg: #0a0a0a;
+    --btn-bg: #2a2a2a; --btn-hover: #383838; --btn-op: #444; --btn-eq: #6a9955;
+    --text: #e0e0e0; --text-muted: #888; --border: #333; --accent: #9cdcfe;
+    --nav-bg: #181818; --input-bg: #2a2a2a;
+    --panic: #d32f2f;
+  }
+  body.light-mode {
+    --bg: #f0f0f0; --panel-bg: #ffffff; --display-bg: #fafafa;
+    --btn-bg: #e0e0e0; --btn-hover: #d0d0d0; --btn-op: #c0c0c0; --btn-eq: #4caf50;
+    --text: #212121; --text-muted: #757575; --border: #ccc; --accent: #1976d2;
+    --nav-bg: #f5f5f5; --input-bg: #e0e0e0;
+    --panic: #c62828;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; width: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, sans-serif;
+    overflow: hidden; transition: background 0.3s;
+  }
+  #lockScreen {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; gap: 16px;
+  }
+  #lockScreen.hidden { display: none; }
+  .lock-title { font-size: 28px; font-weight: bold; color: var(--text); letter-spacing: 1px; }
+  .lock-sub { font-size: 15px; color: var(--text-muted); text-align: center; }
+  .pin-dots { display: flex; gap: 14px; margin: 8px 0; }
+  .pin-dot {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--border); background: transparent;
+    transition: background 0.15s;
+  }
+  .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+  .pin-field {
+    background: var(--input-bg);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 28px;
+    letter-spacing: 16px;
+    color: var(--text);
+    text-align: center;
+    width: 240px;
+    outline: none;
+    font-family: inherit;
+  }
+  .pin-field:focus { border-color: var(--accent); }
+  .pin-field::placeholder { letter-spacing: normal; font-size: 15px; color: var(--text-muted); }
+  .lock-link {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 13px; text-decoration: underline; cursor: pointer;
+  }
+  .lock-error { color: #ff5252; font-size: 13px; min-height: 16px; text-align: center; max-width: 320px; }
+  .lock-input {
+    background: var(--input-bg); border: 1px solid var(--border);
+    color: var(--text); padding: 10px; border-radius: 8px;
+    font-size: 16px; width: 260px; outline: none; font-family: inherit;
+  }
+  .lock-btn {
+    background: var(--accent); color: #fff; border: none;
+    padding: 10px 20px; border-radius: 8px; font-size: 15px;
+    font-weight: bold; cursor: pointer; width: 260px;
+  }
+  .app {
+    display: flex; flex-direction: row;
+    width: 100%; height: 100%;
+    background: var(--panel-bg); overflow: hidden;
+  }
+  .nav {
+    width: 75px; background: var(--nav-bg);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 15px; gap: 15px; flex-shrink: 0;
+  }
+  .nav-btn {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 10px; font-weight: bold;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 8px; border-radius: 8px; width: 60px;
+  }
+  .nav-btn.active { background: var(--btn-bg); color: var(--accent); }
+  .nav-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .content {
+    flex: 1; display: flex; flex-direction: column;
+    height: 100%; overflow: hidden;
+  }
+  .tab { display: none; flex-direction: column; height: 100%; width: 100%; }
+  .tab.active { display: flex; }
+  .display {
+    padding: 10px 15px; text-align: right;
+    background: var(--display-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-direction: column; justify-content: flex-end;
+    height: 16%; position: relative;
+    flex-shrink: 0;
+  }
+  .display-actions { position: absolute; top: 8px; left: 8px; display: flex; gap: 8px; }
+  .display-actions button {
+    background: none; border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: 4px;
+    padding: 4px 8px; font-size: 12px; cursor: pointer;
+  }
+  .live-result { font-size: 18px; color: var(--text-muted); height: 22px; }
+  .equation { font-size: 48px; font-weight: bold; overflow-x: auto; white-space: nowrap; }
+  .keypad-container { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+  .sci-pad {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    gap: 1px; background: var(--border); height: 18%;
+    flex-shrink: 0;
+  }
+  .sci-pad button { background: var(--btn-bg); color: var(--accent); font-size: 16px; font-weight: bold; border: none; }
+  .num-pad {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(4, 1fr) 1.2fr;
+    gap: 1px; background: var(--border); height: 82%;
+    flex-shrink: 0;
+  }
+  .num-pad button { background: var(--btn-bg); color: var(--text); font-size: 34px; border: none; }
+  .num-pad .op { background: var(--btn-op); font-size: 38px; }
+  .num-pad .clear { color: #ff5252; }
+  .page-header {
+    padding: 15px; font-size: 24px; font-weight: bold;
+    border-bottom: 2px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panic-btn {
+    background: var(--panic); color: #fff; border: none;
+    padding: 8px 16px; border-radius: 6px;
+    font-size: 13px; font-weight: 900; letter-spacing: 2px;
+    text-transform: uppercase; cursor: pointer;
+  }
+  .page-content { padding: 15px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label { font-size: 14px; color: var(--text-muted); font-weight: bold; }
+  .form-control {
+    background: var(--input-bg); border: 1px solid var(--border);
+    color: var(--text); padding: 10px; border-radius: 8px;
+    font-size: 16px; outline: none; font-family: inherit;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; min-width: 0; }
+  .swap-btn {
+    flex: 0 0 40px !important; height: 40px; border-radius: 50% !important;
+    font-size: 16px !important; display: flex; align-items: center; justify-content: center;
+    background: var(--btn-op) !important; color: white !important; border: none; cursor: pointer;
+  }
+  .history-list { padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .history-item {
+    background: var(--input-bg); border: 1px solid var(--border);
+    padding: 10px; border-radius: 6px; cursor: pointer; text-align: right;
+  }
+  .history-eq { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+  .history-res { font-size: 20px; font-weight: bold; color: var(--accent); }
+  .settings-category { margin-bottom: 15px; }
+  .settings-category h3 {
+    color: var(--accent); font-size: 15px; text-transform: uppercase;
+    margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border);
+  }
+  .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 16px; }
+  .toggle-switch { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--btn-bg); transition: .4s; border-radius: 26px;
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+    background-color: var(--text); transition: .4s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: var(--accent); }
+  input:checked + .slider:before { transform: translateX(20px); }
+  .select-setting {
+    background: var(--input-bg); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 8px; border-radius: 4px;
+    font-size: 14px; outline: none;
+  }
+  .tutorial-item { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .tutorial-toggle {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; background: var(--input-bg); color: var(--text);
+    border: none; padding: 12px; font-size: 15px; font-weight: bold;
+    cursor: pointer; font-family: inherit; text-align: left;
+  }
+  .tutorial-arrow { transition: transform 0.2s; color: var(--accent); }
+  .tutorial-toggle.open .tutorial-arrow { transform: rotate(90deg); }
+  .tutorial-body {
+    display: none; padding: 12px; font-size: 13px; line-height: 1.5;
+    color: var(--text-muted); background: var(--panel-bg);
+  }
+  .tutorial-body.open { display: block; }
+  .tutorial-body p { margin-bottom: 10px; }
+  .tutorial-body p:last-child { margin-bottom: 0; }
+  .tutorial-body strong { color: var(--text); }
+  input[type="color"] {
+    -webkit-appearance: none; border: 1px solid var(--border);
+    width: 46px; height: 30px; border-radius: 4px; cursor: pointer;
+    background: transparent; padding: 0;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+  @media (max-width: 700px) {
+    .app { flex-direction: column; }
+    .nav {
+      width: 100%; height: 60px; flex-direction: row; justify-content: space-around;
+      padding-top: 0; border-right: none; border-top: 1px solid var(--border); order: 2;
+    }
+    .nav-btn { padding: 5px; width: auto; font-size: 10px; }
+    .nav-btn svg { width: 20px; height: 20px; }
+    .content { order: 1; }
+    .display { height: 16%; }
+    .equation { font-size: 42px; }
+    .sci-pad button { font-size: 14px; }
+    .num-pad button { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <div class="lock-title" id="lockTitle">Calcsprace</div>
+  <div class="lock-sub" id="lockSub">Enter your PIN</div>
+  <div class="pin-dots" id="pinDots"></div>
+  <div class="lock-error" id="lockError"></div>
+  <input type="text" id="pinField" class="pin-field" maxlength="4" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Tap to enter PIN" oninput="onPinInput()">
+  <div id="lockExtra"></div>
+</div>
+
+<div class="app">
+  <div class="nav">
+    <button class="nav-btn active" onclick="switchTab('tab-calc', this)">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-6 16h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2z"/></svg>
+      Calc
+    </button>
+    <button class="nav-btn" onclick="switchTab('tab-convert', this)">
+      <svg viewBox="0 0 24 24"><path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/></svg>
+      Convert
+    </button>
+    <button class="nav-btn" onclick="switchTab('tab-history', this)">
+      <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+      History
+    </button>
+    <button class="nav-btn" onclick="switchTab('tab-date', this)">
+      <svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+      Date
+    </button>
+    <button class="nav-btn" onclick="switchTab('tab-settings', this)">
+      <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+      Settings
+    </button>
+  </div>
+
+  <div class="content">
+    <div id="tab-calc" class="tab active">
+      <div class="display">
+        <div class="display-actions"><button onclick="copyResult()">⧉ Copy</button></div>
+        <div class="live-result" id="liveResult"></div>
+        <div class="equation" id="equation">0</div>
+      </div>
+      <div class="keypad-container">
+        <div class="sci-pad">
+          <button onclick="btnClick('sin(')">sin</button>
+          <button onclick="btnClick('cos(')">cos</button>
+          <button onclick="btnClick('tan(')">tan</button>
+          <button onclick="btnClick('ln(')">ln</button>
+          <button onclick="btnClick('log(')">log</button>
+          <button onclick="btnClick('sqrt(')">√</button>
+          <button onclick="btnClick('^')">x^y</button>
+          <button onclick="btnClick('!')">x!</button>
+          <button onclick="btnClick('Math.PI')">π</button>
+          <button onclick="btnClick('Math.E')">e</button>
+          <button onclick="memAction('MC')" style="color:#ff5252;">MC</button>
+          <button onclick="memAction('MR')" style="color:#ffb74d;">MR</button>
+        </div>
+        <div class="num-pad">
+          <button class="clear" onclick="btnAction('clear')">AC</button>
+          <button class="clear" onclick="btnAction('backspace')">DEL</button>
+          <button onclick="btnClick('(')">(</button>
+          <button onclick="btnClick(')')">)</button>
+          <button class="op" onclick="btnClick('/')">÷</button>
+          <button onclick="btnClick('7')">7</button>
+          <button onclick="btnClick('8')">8</button>
+          <button onclick="btnClick('9')">9</button>
+          <button onclick="btnClick('%')">%</button>
+          <button class="op" onclick="btnClick('*')">×</button>
+          <button onclick="btnClick('4')">4</button>
+          <button onclick="btnClick('5')">5</button>
+          <button onclick="btnClick('6')">6</button>
+          <button onclick="memAction('M-')" style="color:#ffb74d;">M-</button>
+          <button class="op" onclick="btnClick('-')">-</button>
+          <button onclick="btnClick('1')">1</button>
+          <button onclick="btnClick('2')">2</button>
+          <button onclick="btnClick('3')">3</button>
+          <button onclick="memAction('M+')" style="color:#ffb74d;">M+</button>
+          <button class="op" onclick="btnClick('+')">+</button>
+          <button onclick="btnClick('0')" style="grid-column: span 2;">0</button>
+          <button onclick="btnClick('.')">.</button>
+          <button onclick="btnAction('calculate')" style="grid-column: span 2; background: var(--btn-eq); color: #fff; font-size: 38px;"> = </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-convert" class="tab">
+      <div class="page-header"><span>Unit Converter</span><button class="panic-btn" onclick="triggerPanic()">PANIC</button></div>
+      <div class="page-content">
+        <div class="form-group">
+          <label>Category</label>
+          <select id="conv-cat" class="form-control" onchange="updateUnits()">
+            <option value="length">Length</option>
+            <option value="mass">Mass / Weight</option>
+            <option value="volume">Volume / Cooking</option>
+            <option value="time">Time</option>
+            <option value="area">Area</option>
+            <option value="speed">Speed</option>
+            <option value="temp">Temperature</option>
+            <option value="data">Data Storage</option>
+            <option value="energy">Energy</option>
+            <option value="pressure">Pressure</option>
+            <option value="power">Power</option>
+            <option value="angle">Angle</option>
+            <option value="frequency">Frequency</option>
+            <option value="force">Force</option>
+            <option value="fuel">Fuel Economy</option>
+            <option value="digital">Digital (Bitrate)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>From</label>
+          <div class="row">
+            <input type="number" id="conv-input" class="form-control" value="1" oninput="convertUnits()">
+            <select id="conv-from" class="form-control" onchange="convertUnits()"></select>
+          </div>
+        </div>
+        <div class="form-group"><div style="text-align:center;"><button class="swap-btn" onclick="swapUnits()">⇄</button></div></div>
+        <div class="form-group">
+          <label>To</label>
+          <div class="row">
+            <input type="number" id="conv-output" class="form-control" readonly>
+            <select id="conv-to" class="form-control" onchange="convertUnits()"></select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-history" class="tab">
+      <div class="page-header">
+        <span>History</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button onclick="clearHistory()" style="background:#ff5252; color:white; border:none; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer;">Clear</button>
+          <button class="panic-btn" onclick="triggerPanic()">PANIC</button>
+        </div>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+
+    <div id="tab-date" class="tab">
+      <div class="page-header"><span>Date Calculator</span><button class="panic-btn" onclick="triggerPanic()">PANIC</button></div>
+      <div class="page-content">
+        <div class="form-group"><label>Start Date</label><input type="date" id="date1" class="form-control"></div>
+        <div class="form-group"><label>End Date</label><input type="date" id="date2" class="form-control"></div>
+        <button class="form-control" style="background:var(--accent); color:#fff; font-weight:bold; cursor:pointer;" onclick="calculateDateDiff()">Calculate Difference</button>
+        <div style="margin-top:15px; text-align:center;">
+          <div style="font-size:14px; color:var(--text-muted);">Difference</div>
+          <div id="date-result" style="font-size:28px; font-weight:bold; color:var(--accent); margin-top:4px;">-</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-settings" class="tab">
+      <div class="page-header"><span>Settings</span><button class="panic-btn" onclick="triggerPanic()">PANIC</button></div>
+      <div class="page-content">
+        <div class="settings-category">
+          <h3>Appearance</h3>
+          <div class="setting-item"><span>Light Mode</span><label class="toggle-switch"><input type="checkbox" id="set-theme" onchange="saveSetting('theme', this.checked)"><span class="slider"></span></label></div>
+          <div class="setting-item"><span>Show Scientific Pad</span><label class="toggle-switch"><input type="checkbox" id="set-scipad" onchange="saveSetting('sciPad', this.checked)"><span class="slider"></span></label></div>
+          <div class="setting-item"><span>Accent Color</span><input type="color" id="set-color" oninput="saveSetting('color', this.value)"></div>
+        </div>
+        <div class="settings-category">
+          <h3>Calculation</h3>
+          <div class="setting-item">
+            <span>Angle Mode</span>
+            <select id="set-angle" class="select-setting" onchange="saveSetting('angle', this.value)">
+              <option value="deg">Degrees</option><option value="rad">Radians</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <span>Precision</span>
+            <select id="set-precision" class="select-setting" onchange="saveSetting('precision', this.value)">
+              <option value="0">0</option><option value="2">2</option><option value="4">4</option><option value="6" selected>6</option><option value="8">8</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-category">
+          <h3>Formatting</h3>
+          <div class="setting-item"><span>Thousands Separator</span><label class="toggle-switch"><input type="checkbox" id="set-separator" onchange="saveSetting('separator', this.checked)"><span class="slider"></span></label></div>
+          <div class="setting-item"><span>Scientific Notation</span><label class="toggle-switch"><input type="checkbox" id="set-scinot" onchange="saveSetting('sciNot', this.checked)"><span class="slider"></span></label></div>
+        </div>
+        <div class="settings-category">
+          <h3>Feedback</h3>
+          <div class="setting-item"><span>Haptic Feedback</span><label class="toggle-switch"><input type="checkbox" id="set-haptics" onchange="saveSetting('haptics', this.checked)"><span class="slider"></span></label></div>
+        </div>
+        <div class="settings-category">
+          <h3>Input / Output</h3>
+          <div class="setting-item"><span>Live Result Preview</span><label class="toggle-switch"><input type="checkbox" id="set-live" onchange="saveSetting('liveResult', this.checked)"><span class="slider"></span></label></div>
+          <div class="setting-item"><span>Confirm on Clear</span><label class="toggle-switch"><input type="checkbox" id="set-confirmclear" onchange="saveSetting('confirmClear', this.checked)"><span class="slider"></span></label></div>
+        </div>
+        <div class="settings-category">
+          <h3>History</h3>
+          <div class="setting-item"><span>Auto-copy Result</span><label class="toggle-switch"><input type="checkbox" id="set-autocopy" onchange="saveSetting('autoCopy', this.checked)"><span class="slider"></span></label></div>
+          <div class="setting-item"><span>Save History</span><label class="toggle-switch"><input type="checkbox" id="set-savehistory" onchange="saveSetting('saveHistory', this.checked)"><span class="slider"></span></label></div>
+        </div>
+        <div class="settings-category">
+          <h3>Security</h3>
+          <div class="setting-item" style="color:var(--text-muted); font-size:13px; display:block;">
+            Lock on launch is always on and cannot be disabled. PIN is exactly 4 characters: letters, digits, or any mix. 5 failed PIN attempts wipe all data. One wrong security-question answer wipes all data. PIN and security question can only be reset through the recovery flow, never edited directly.
+          </div>
+        </div>
+        <div class="settings-category">
+          <h3>Tutorial</h3>
+          <div class="tutorial-item">
+            <button class="tutorial-toggle" onclick="toggleTutorial(this)">
+              <span>How to use Calcsprace</span>
+              <span class="tutorial-arrow">▸</span>
+            </button>
+            <div class="tutorial-body">
+              <p><strong>Lock screen.</strong> Calcsprace always locks on launch. You can't turn this off. Tap the PIN box to bring up your device's keyboard.</p>
+              <p><strong>PIN rules.</strong> Exactly 4 characters. Letters, digits, or any mix. All allowed.</p>
+              <p><strong>Forgot PIN?</strong> Use the security question you set during setup. You get one attempt. A wrong answer wipes everything.</p>
+              <p><strong>Too many wrong PINs.</strong> 5 failed attempts wipe all data. No lockout screen, no countdown. Just a fresh install.</p>
+              <p><strong>PANIC button.</strong> Red button in the top-right of every tab. Wipes everything instantly, no confirmation. Use it if your device is being taken.</p>
+              <p><strong>Calculator.</strong> Standard and scientific. Memory keys on the scientific pad. Live preview shows the result as you type.</p>
+              <p><strong>Converter.</strong> 16 categories. Pick from/to units, enter a value, get the result live.</p>
+              <p><strong>History.</strong> Tap any past result to bring it back into the calculator.</p>
+              <p><strong>Date calculator.</strong> Difference in days between two dates.</p>
+              <p><strong>Privacy.</strong> Everything stays on your device. No sync, no network, no accounts. Wiping is irreversible.</p>
+            </div>
+          </div>
+        </div>
+        <div class="settings-category">
+          <h3>About</h3>
+          <div class="setting-item"><span>Version Info</span><span style="color:var(--text-muted); font-size:12px;">v1.1.8 test</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let settings = { 
+    theme: false, haptics: false, liveResult: true, sciPad: true, 
+    angle: 'deg', precision: 6, separator: false, sciNot: false, 
+    confirmClear: false, autoCopy: false, saveHistory: true, color: '#9cdcfe'
+  };
+  let security = { pin: null, question: null, answer: null };
+  let currentExpr = "";
+  let memory = 0;
+  let history = [];
+  let lockMode = "setup-pin";
+  let tempPin = "";
+  let tempSec = { question: null, answer: null };
+  let failedPinAttempts = 0;
+  const MAX_PIN_ATTEMPTS = 5;
+  const PIN_LENGTH = 4;
+  const eqEl = document.getElementById('equation');
+  const liveEl = document.getElementById('liveResult');
+  const pinField = document.getElementById('pinField');
+
+  function loadSecurity() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('calcsprace_security'));
+      if (saved) security = { ...security, ...saved };
+    } catch(e) {}
+  }
+  function saveSecurity() {
+    try { localStorage.setItem('calcsprace_security', JSON.stringify(security)); } catch(e) {}
+  }
+  function hashAnswer(str) {
+    str = str.toLowerCase().trim();
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h |= 0; }
+    return 'h' + h;
+  }
+  function hashPin(pin) {
+    let h = 5381;
+    for (let i = 0; i < pin.length; i++) { h = ((h << 5) + h) + pin.charCodeAt(i); h |= 0; }
+    return 'p' + h;
+  }
+  function renderPinDots() {
+    const dots = document.getElementById('pinDots');
+    dots.innerHTML = '';
+    const val = pinField.value || "";
+    for (let i = 0; i < PIN_LENGTH; i++) {
+      const d = document.createElement('div');
+      d.className = 'pin-dot' + (i < val.length ? ' filled' : '');
+      dots.appendChild(d);
+    }
+  }
+  function setLockError(msg) { document.getElementById('lockError').textContent = msg || ''; }
+  function setLockHeader(title, sub) {
+    document.getElementById('lockTitle').textContent = title;
+    document.getElementById('lockSub').textContent = sub;
+  }
+  function clearLockExtra() { document.getElementById('lockExtra').innerHTML = ''; }
+
+  function showLockScreen() {
+    pinField.value = "";
+    setLockError("");
+    clearLockExtra();
+    failedPinAttempts = 0;
+    if (!security.pin) {
+      lockMode = "setup-pin"; tempPin = "";
+      setLockHeader("Calcsprace", "Create a PIN (4 characters)");
+      pinField.placeholder = "Tap to create PIN";
+    } else {
+      lockMode = "unlock";
+      setLockHeader("Calcsprace", "Enter your PIN");
+      pinField.placeholder = "Tap to enter PIN";
+      const forgot = document.createElement('button');
+      forgot.className = 'lock-link'; forgot.textContent = 'Forgot PIN?';
+      forgot.onclick = startForgotPin;
+      document.getElementById('lockExtra').appendChild(forgot);
+    }
+    renderPinDots();
+    document.getElementById('lockScreen').classList.remove('hidden');
+    setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+  }
+  function hideLockScreen() {
+    pinField.blur();
+    document.getElementById('lockScreen').classList.add('hidden');
+  }
+  function triggerPanic() { localStorage.clear(); location.reload(); }
+  function wipeAll(reason) { localStorage.clear(); alert(reason + " All data wiped."); location.reload(); }
+
+  function onPinInput() {
+    renderPinDots();
+    if (pinField.value.length >= PIN_LENGTH) {
+      setTimeout(submitPin, 120);
+    }
+  }
+
+  function submitPin() {
+    const p = pinField.value;
+    pinField.value = "";
+    renderPinDots();
+
+    if (lockMode === "setup-pin") {
+      if (p.length !== PIN_LENGTH) { setLockError("PIN must be exactly " + PIN_LENGTH + " characters"); return; }
+      tempPin = p;
+      lockMode = "setup-confirm";
+      setLockHeader("Calcsprace", "Confirm PIN");
+      setLockError("");
+      setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+      return;
+    }
+    if (lockMode === "setup-confirm") {
+      if (p !== tempPin) {
+        setLockError("PINs did not match. Try again.");
+        lockMode = "setup-pin"; tempPin = "";
+        setLockHeader("Calcsprace", "Create a PIN (4 characters)");
+        setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+        return;
+      }
+      lockMode = "setup-question";
+      pinField.blur();
+      setLockHeader("Calcsprace", "Set a recovery question.");
+      setLockError(""); clearLockExtra();
+      const wrap = document.createElement('div');
+      wrap.style.display = 'flex'; wrap.style.flexDirection = 'column';
+      wrap.style.gap = '10px'; wrap.style.alignItems = 'center';
+      const q = document.createElement('input');
+      q.className = 'lock-input'; q.placeholder = 'Recovery question';
+      const next = document.createElement('button');
+      next.className = 'lock-btn'; next.textContent = 'Next';
+      next.onclick = () => {
+        const question = q.value.trim();
+        if (!question) { setLockError("Please enter a question"); return; }
+        tempSec.question = question;
+        lockMode = "setup-answer";
+        setLockHeader("Calcsprace", "Set your answer.");
+        setLockError(""); clearLockExtra();
+        const aWrap = document.createElement('div');
+        aWrap.style.display = 'flex'; aWrap.style.flexDirection = 'column';
+        aWrap.style.gap = '10px'; aWrap.style.alignItems = 'center';
+        const a = document.createElement('input');
+        a.className = 'lock-input'; a.type = 'password'; a.placeholder = 'Answer';
+        const save = document.createElement('button');
+        save.className = 'lock-btn'; save.textContent = 'Save';
+        save.onclick = () => {
+          const answer = a.value.trim();
+          if (!answer) { setLockError("Please enter an answer"); return; }
+          security.pin = hashPin(tempPin);
+          security.question = tempSec.question;
+          security.answer = hashAnswer(answer);
+          saveSecurity(); hideLockScreen();
+        };
+        aWrap.appendChild(a); aWrap.appendChild(save);
+        document.getElementById('lockExtra').appendChild(aWrap);
+      };
+      wrap.appendChild(q); wrap.appendChild(next);
+      document.getElementById('lockExtra').appendChild(wrap);
+      return;
+    }
+    if (lockMode === "unlock") {
+      if (hashPin(p) === security.pin) {
+        failedPinAttempts = 0; hideLockScreen();
+      } else {
+        failedPinAttempts++;
+        const remaining = MAX_PIN_ATTEMPTS - failedPinAttempts;
+        if (failedPinAttempts >= MAX_PIN_ATTEMPTS) {
+          wipeAll("Too many failed PIN attempts.");
+        } else {
+          setLockError(`Incorrect PIN. ${remaining} attempt${remaining === 1 ? '' : 's'} left before wipe.`);
+          setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+        }
+      }
+      return;
+    }
+  }
+
+  function startForgotPin() {
+    lockMode = "forgot-question";
+    pinField.blur();
+    setLockHeader("Calcsprace", security.question);
+    setLockError(""); clearLockExtra();
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex'; wrap.style.flexDirection = 'column';
+    wrap.style.gap = '10px'; wrap.style.alignItems = 'center';
+    const a = document.createElement('input');
+    a.className = 'lock-input'; a.type = 'password'; a.placeholder = 'Your answer';
+    const btn = document.createElement('button');
+    btn.className = 'lock-btn'; btn.textContent = 'Verify';
+    btn.onclick = () => {
+      if (hashAnswer(a.value) === security.answer) {
+        lockMode = "setup-pin"; tempPin = "";
+        setLockHeader("Calcsprace", "Create a new PIN (4 characters)");
+        setLockError(""); pinField.value = ""; renderPinDots(); clearLockExtra();
+        setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+      } else {
+        wipeAll("Incorrect security answer.");
+      }
+    };
+    const cancel = document.createElement('button');
+    cancel.className = 'lock-link'; cancel.textContent = 'Cancel';
+    cancel.onclick = () => {
+      lockMode = "unlock";
+      setLockHeader("Calcsprace", "Enter your PIN");
+      setLockError(""); pinField.value = ""; renderPinDots(); clearLockExtra();
+      const forgot = document.createElement('button');
+      forgot.className = 'lock-link'; forgot.textContent = 'Forgot PIN?';
+      forgot.onclick = startForgotPin;
+      document.getElementById('lockExtra').appendChild(forgot);
+      setTimeout(() => { try { pinField.focus(); } catch(e) {} }, 100);
+    };
+    wrap.appendChild(a); wrap.appendChild(btn); wrap.appendChild(cancel);
+    document.getElementById('lockExtra').appendChild(wrap);
+  }
+
+  function loadSettings() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('calcsprace_settings'));
+      if (saved) settings = { ...settings, ...saved };
+      const savedHistory = JSON.parse(localStorage.getItem('calcsprace_history'));
+      if (savedHistory) history = savedHistory;
+    } catch(e) {}
+    document.getElementById('set-theme').checked = settings.theme;
+    document.getElementById('set-haptics').checked = settings.haptics;
+    document.getElementById('set-live').checked = settings.liveResult;
+    document.getElementById('set-scipad').checked = settings.sciPad;
+    document.getElementById('set-separator').checked = settings.separator;
+    document.getElementById('set-scinot').checked = settings.sciNot;
+    document.getElementById('set-confirmclear').checked = settings.confirmClear;
+    document.getElementById('set-autocopy').checked = settings.autoCopy;
+    document.getElementById('set-savehistory').checked = settings.saveHistory;
+    document.getElementById('set-angle').value = settings.angle;
+    document.getElementById('set-precision').value = settings.precision;
+    document.getElementById('set-color').value = settings.color;
+    if (settings.theme) document.body.classList.add('light-mode');
+    if (!settings.sciPad) { document.querySelector('.sci-pad').style.display = 'none'; }
+    applyAccentColor(settings.color);
+    renderHistory();
+  }
+  function saveSetting(key, value) {
+    settings[key] = value;
+    try { localStorage.setItem('calcsprace_settings', JSON.stringify(settings)); } catch(e) {}
+    if (key === 'theme') document.body.classList.toggle('light-mode', value);
+    if (key === 'sciPad') document.querySelector('.sci-pad').style.display = value ? 'grid' : 'none';
+    if (key === 'color') applyAccentColor(value);
+    updateDisplay();
+  }
+  function applyAccentColor(color) {
+    document.body.style.setProperty('--accent', color);
+    document.body.style.setProperty('--btn-eq', color);
+  }
+  function toggleTutorial(btn) {
+    btn.classList.toggle('open');
+    btn.nextElementSibling.classList.toggle('open');
+  }
+  function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+  }
+  function triggerHaptic() { if (settings.haptics && navigator.vibrate) navigator.vibrate(10); }
+  function memAction(action) {
+    triggerHaptic();
+    if (action === 'MC') memory = 0;
+    else if (action === 'MR') btnClick(memory.toString());
+    else if (action === 'M+') { try { memory += safeEval(currentExpr || "0"); } catch(e){} }
+    else if (action === 'M-') { try { memory -= safeEval(currentExpr || "0"); } catch(e){} }
+  }
+  function btnClick(val) {
+    triggerHaptic();
+    if (val === '.') {
+      const parts = currentExpr.split(/[\+\-\*\/\(\)\^]/);
+      if (parts[parts.length - 1].includes('.')) return;
+    }
+    currentExpr += val;
+    updateDisplay();
+  }
+  function btnAction(action) {
+    triggerHaptic();
+    if (action === 'clear') {
+      if (settings.confirmClear && currentExpr.length > 0 && !confirm('Clear calculation?')) return;
+      clearAll();
+    }
+    else if (action === 'backspace') backspace();
+    else if (action === 'calculate') calculate();
+  }
+  function copyResult() {
+    navigator.clipboard.writeText(eqEl.textContent);
+    alert("Copied: " + eqEl.textContent);
+  }
+  function updateDisplay() {
+    let str = currentExpr
+      .replace(/\*/g, '×').replace(/\//g, '÷').replace(/\^/g, '^')
+      .replace(/Math\.PI/g, 'π').replace(/Math\.E/g, 'e')
+      .replace(/sqrt/g, '√').replace(/mod/g, '%');
+    if (currentExpr !== "" && !isNaN(currentExpr)) {
+      eqEl.textContent = formatNumber(parseFloat(currentExpr));
+    } else {
+      eqEl.textContent = str || "0";
+    }
+    eqEl.scrollLeft = eqEl.scrollWidth;
+    if (!settings.liveResult) { liveEl.textContent = ""; return; }
+    try {
+      if (currentExpr.length > 0 && /[\+\-\*\/]/.test(currentExpr) && /[0-9\)\!]$/.test(currentExpr)) {
+        let res = safeEval(currentExpr);
+        if (!isNaN(res) && isFinite(res)) { liveEl.textContent = "= " + formatNumber(res); return; }
+      }
+      liveEl.textContent = "";
+    } catch (e) { liveEl.textContent = ""; }
+  }
+  function safeEval(expr) {
+    let e = expr
+      .replace(/Math\.PI/g, '3.141592653589793').replace(/Math\.E/g, '2.718281828459045')
+      .replace(/sqrt\(/g, 'Math.sqrt(').replace(/ln\(/g, 'Math.log(').replace(/log\(/g, 'Math.log10(')
+      .replace(/mod/g, '%').replace(/\^/g, '**');
+    e = e.replace(/(\d+)!/g, 'fact($1)');
+    e = e.replace(/sin\(/g, '__SIN__(').replace(/cos\(/g, '__COS__(').replace(/tan\(/g, '__TAN__(');
+    e = e.replace(/([0-9\)])(3\.14159|2\.71828|\(|__SIN__|__COS__|__TAN__)/g, '$1*$2');
+    const isDeg = settings.angle === 'deg';
+    const func = new Function('__SIN__', '__COS__', '__TAN__', 'fact', 'return ' + e);
+    return func(
+      function(x) { return isDeg ? Math.sin(x * Math.PI / 180) : Math.sin(x); },
+      function(x) { return isDeg ? Math.cos(x * Math.PI / 180) : Math.cos(x); },
+      function(x) { return isDeg ? Math.tan(x * Math.PI / 180) : Math.tan(x); },
+      function fact(n) { if(n<0) return 0; if(n===0||n===1) return 1; let r=1; for(let i=2;i<=n;i++) r*=i; return r; }
+    );
+  }
+  function formatNumber(num) {
+    if (!isFinite(num) || isNaN(num)) return "Too Big!";
+    let str = num.toFixed(parseInt(settings.precision));
+    if (str.includes('.')) str = str.replace(/0+$/, '').replace(/\.$/, '');
+    if (settings.sciNot && (Math.abs(num) >= 1e9 || (Math.abs(num) > 0 && Math.abs(num) < 1e-6))) {
+      return num.toExponential(parseInt(settings.precision));
+    }
+    if (settings.separator) {
+      let parts = str.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      str = parts.join('.');
+    }
+    return str;
+  }
+  function calculate() {
+    if (!currentExpr) return;
+    try {
+      let res = safeEval(currentExpr);
+      if (!isFinite(res) || isNaN(res)) { eqEl.textContent = "Too Big!"; liveEl.textContent = ""; currentExpr = ""; return; }
+      let oldEq = currentExpr.replace(/\*/g, '×').replace(/\//g, '÷').replace(/\^/g, '^').replace(/Math\.PI/g, 'π').replace(/Math\.E/g, 'e');
+      let formattedRes = formatNumber(res);
+      if (settings.saveHistory) {
+        history.unshift({ eq: oldEq, res: formattedRes });
+        if(history.length > 50) history.pop();
+        try { localStorage.setItem('calcsprace_history', JSON.stringify(history)); } catch(e){}
+        renderHistory();
+      }
+      currentExpr = res.toString();
+      eqEl.textContent = formattedRes;
+      liveEl.textContent = "";
+      if (settings.autoCopy) navigator.clipboard.writeText(currentExpr);
+    } catch (e) { eqEl.textContent = "Error"; currentExpr = ""; }
+  }
+  function clearAll() { currentExpr = ""; eqEl.textContent = "0"; liveEl.textContent = ""; }
+  function backspace() { currentExpr = currentExpr.slice(0, -1); updateDisplay(); }
+  function renderHistory() {
+    const list = document.getElementById('historyList');
+    list.innerHTML = '';
+    if (history.length === 0) {
+      list.innerHTML = '<div style="color:var(--text-muted);text-align:center;margin-top:20px;font-size:14px;">No history yet</div>';
+      return;
+    }
+    history.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `<div class="history-eq">${item.eq} =</div><div class="history-res">${item.res}</div>`;
+      div.onclick = () => { btnClick(item.res); switchTab('tab-calc', document.querySelectorAll('.nav-btn')[0]); };
+      list.appendChild(div);
+    });
+  }
+  function clearHistory() {
+    if(confirm('Clear history?')) {
+      history = []; localStorage.removeItem('calcsprace_history'); renderHistory();
+    }
+  }
+
+  const units = {
+    length: { mm:{rate:0.001,name:'Millimeters'},cm:{rate:0.01,name:'Centimeters'},m:{rate:1,name:'Meters'},km:{rate:1000,name:'Kilometers'},in:{rate:0.0254,name:'Inches'},ft:{rate:0.3048,name:'Feet'},yd:{rate:0.9144,name:'Yards'},mi:{rate:1609.34,name:'Miles'},nmi:{rate:1852,name:'Nautical Miles'} },
+    mass: { mg:{rate:1e-6,name:'Milligrams'},g:{rate:0.001,name:'Grams'},kg:{rate:1,name:'Kilograms'},t:{rate:1000,name:'Metric Tons'},oz:{rate:0.0283495,name:'Ounces'},lb:{rate:0.453592,name:'Pounds'},st:{rate:6.35029,name:'Stones'} },
+    volume: { ml:{rate:0.001,name:'Milliliters'},l:{rate:1,name:'Liters'},tsp:{rate:0.00492892,name:'Teaspoons'},tbsp:{rate:0.0147868,name:'Tablespoons'},fl_oz:{rate:0.0295735,name:'Fluid Ounces'},cup:{rate:0.236588,name:'Cups'},pt:{rate:0.473176,name:'Pints'},qt:{rate:0.946353,name:'Quarts'},gal:{rate:3.78541,name:'Gallons'} },
+    time: { s:{rate:1,name:'Seconds'},min:{rate:60,name:'Minutes'},hr:{rate:3600,name:'Hours'},day:{rate:86400,name:'Days'},wk:{rate:604800,name:'Weeks'},yr:{rate:31557600,name:'Years'} },
+    area: { m2:{rate:1,name:'Square Meters'},km2:{rate:1e6,name:'Square Kilometers'},ft2:{rate:0.092903,name:'Square Feet'},mi2:{rate:2589988.11,name:'Square Miles'},acre:{rate:4046.86,name:'Acres'},ha:{rate:10000,name:'Hectares'} },
+    speed: { mps:{rate:1,name:'Meters/sec'},kmh:{rate:0.277778,name:'Kilometers/hour'},mph:{rate:0.44704,name:'Miles/hour'},knot:{rate:0.514444,name:'Knots'},mach:{rate:340.29,name:'Mach'} },
+    temp: { C:{rate:'C',name:'Celsius'},F:{rate:'F',name:'Fahrenheit'},K:{rate:'K',name:'Kelvin'} },
+    data: { B:{rate:1,name:'Bytes'},KB:{rate:1024,name:'Kilobytes'},MB:{rate:1048576,name:'Megabytes'},GB:{rate:1073741824,name:'Gigabytes'},TB:{rate:1099511627776,name:'Terabytes'} },
+    energy: { J:{rate:1,name:'Joules'},kJ:{rate:1000,name:'Kilojoules'},cal:{rate:4.184,name:'Calories'},kcal:{rate:4184,name:'Kilocalories'},Wh:{rate:3600,name:'Watt-hours'},kWh:{rate:3.6e6,name:'Kilowatt-hours'},BTU:{rate:1055.06,name:'BTUs'} },
+    pressure: { Pa:{rate:1,name:'Pascals'},kPa:{rate:1000,name:'Kilopascals'},bar:{rate:100000,name:'Bars'},atm:{rate:101325,name:'Atmospheres'},psi:{rate:6894.76,name:'PSI'},mmHg:{rate:133.322,name:'mmHg'} },
+    power: { W:{rate:1,name:'Watts'},kW:{rate:1000,name:'Kilowatts'},MW:{rate:1e6,name:'Megawatts'},GW:{rate:1e9,name:'Gigawatts'},hp:{rate:745.7,name:'Horsepower'} },
+    angle: { deg:{rate:1,name:'Degrees'},rad:{rate:57.2958,name:'Radians'},grad:{rate:0.9,name:'Gradians'},turn:{rate:360,name:'Turns'} },
+    frequency: { Hz:{rate:1,name:'Hertz'},kHz:{rate:1000,name:'Kilohertz'},MHz:{rate:1e6,name:'Megahertz'},GHz:{rate:1e9,name:'Gigahertz'} },
+    force: { N:{rate:1,name:'Newtons'},kN:{rate:1000,name:'Kilonewtons'},lbf:{rate:4.44822,name:'Pound-force'},dyn:{rate:1e-5,name:'Dynes'} },
+    fuel: { l100km:{rate:1,name:'L/100km'},mpgus:{rate:235.215,name:'MPG (US)'},mpguk:{rate:282.481,name:'MPG (UK)'},kml:{rate:100,name:'km/L'} },
+    digital: { bps:{rate:1,name:'bits/sec'},Kbps:{rate:1000,name:'Kilobits/sec'},Mbps:{rate:1e6,name:'Megabits/sec'},Gbps:{rate:1e9,name:'Gigabits/sec'} }
+  };
+
+  function updateUnits() {
+    const cat = document.getElementById('conv-cat').value;
+    const f = document.getElementById('conv-from');
+    const t = document.getElementById('conv-to');
+    f.innerHTML = ''; t.innerHTML = '';
+    if(!units[cat]) return;
+    for (let u in units[cat]) {
+      f.innerHTML += `<option value="${u}">${u} (${units[cat][u].name})</option>`;
+      t.innerHTML += `<option value="${u}">${u} (${units[cat][u].name})</option>`;
+    }
+    t.selectedIndex = 1;
+    convertUnits();
+  }
+  function swapUnits() {
+    const f = document.getElementById('conv-from');
+    const t = document.getElementById('conv-to');
+    const temp = f.value;
+    f.value = t.value; t.value = temp;
+    convertUnits();
+  }
+  function convertUnits() {
+    const cat = document.getElementById('conv-cat').value;
+    const val = parseFloat(document.getElementById('conv-input').value);
+    const from = document.getElementById('conv-from').value;
+    const to = document.getElementById('conv-to').value;
+    const out = document.getElementById('conv-output');
+    if (isNaN(val) || !units[cat]) { out.value = ''; return; }
+    let res = 0;
+    if (cat === 'temp') {
+      let c = from === 'C' ? val : from === 'F' ? (val - 32) * 5/9 : val - 273.15;
+      res = to === 'C' ? c : to === 'F' ? (c * 9/5) + 32 : c + 273.15;
+    } else {
+      res = (val * units[cat][from].rate) / units[cat][to].rate;
+    }
+    out.value = formatNumber(res);
+  }
+  function calculateDateDiff() {
+    const d1 = new Date(document.getElementById('date1').value);
+    const d2 = new Date(document.getElementById('date2').value);
+    if (isNaN(d1) || isNaN(d2)) return;
+    const diffDays = Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
+    document.getElementById('date-result').textContent = diffDays + " days";
+  }
+
+  loadSecurity();
+  loadSettings();
+  updateUnits();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('date1').value = today;
+  document.getElementById('date2').value = today;
+  showLockScreen();
+</script>
+</body>
+</html>
